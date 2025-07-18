@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "+8C3b/+tG1k=",
+  "dgSpecHash": "0SYqzS56EV8=",
   "success": true,
-  "projectFilePath": "C:\\Users\\Apostolis\\Documents\\API\\StorageManagement.API\\StorageManagement.API.csproj",
+  "projectFilePath": "C:\\Users\\Apostolis\\Documents\\StorageAPI.V2\\StorageAPI.V2\\StorageManagement.API.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Apostolis\\.nuget\\packages\\bcrypt.net-next\\4.0.3\\bcrypt.net-next.4.0.3.nupkg.sha512",
     "C:\\Users\\Apostolis\\.nuget\\packages\\dapper\\2.0.123\\dapper.2.0.123.nupkg.sha512",
