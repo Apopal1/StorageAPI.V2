@@ -1172,11 +1172,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Apostolis\\Documents\\API\\StorageManagement.API\\StorageManagement.API.csproj",
+      "projectUniqueName": "C:\\Users\\Apostolis\\Documents\\StorageAPI.V2\\StorageAPI.V2\\StorageManagement.API.csproj",
       "projectName": "StorageManagement.API",
-      "projectPath": "C:\\Users\\Apostolis\\Documents\\API\\StorageManagement.API\\StorageManagement.API.csproj",
+      "projectPath": "C:\\Users\\Apostolis\\Documents\\StorageAPI.V2\\StorageAPI.V2\\StorageManagement.API.csproj",
       "packagesPath": "C:\\Users\\Apostolis\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Apostolis\\Documents\\API\\StorageManagement.API\\obj\\",
+      "outputPath": "C:\\Users\\Apostolis\\Documents\\StorageAPI.V2\\StorageAPI.V2\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
