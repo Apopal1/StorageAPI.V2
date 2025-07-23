@@ -76,10 +76,17 @@ namespace StorageManagement.API.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> Delete(int id)
         {
-            var success = await _supplierRepository.DeleteAsync(id);
-            if (!success)
-                return NotFound();
-            return NoContent();
+            try
+            {
+                var success = await _supplierRepository.DeleteAsync(id);
+                if (!success)
+                    return NotFound();
+                return NoContent();
+            }
+            catch (Microsoft.Data.Sqlite.SqliteException ex) when (ex.SqliteErrorCode == 19)
+            {
+                return BadRequest("Cannot delete this supplier because it is associated with one or more storage items. Please reassign or delete the items first.");
+            }
         }
     }
 }

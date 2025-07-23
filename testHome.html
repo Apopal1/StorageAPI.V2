@@ -25,6 +25,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
     <script type="text/babel">
         const { useState, useEffect, useCallback, useRef, useMemo } = React;
@@ -657,6 +658,70 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
+
+        // --- Easter Egg ---
+        const konamiCode = [
+            'ArrowUp',
+            'ArrowUp',
+            'ArrowDown',
+            'ArrowDown',
+            'ArrowLeft',
+            'ArrowRight',
+            'ArrowLeft',
+            'ArrowRight',
+            'b',
+            'a'
+        ];
+        let konamiIndex = 0;
+        document.addEventListener('keydown', (e) => {
+            if (e.key === konamiCode[konamiIndex]) {
+                konamiIndex++;
+                if (konamiIndex === konamiCode.length) {
+                    konamiIndex = 0;
+                    fetch(`${API_BASE_URL}/api/mystery/egg`)
+                        .then(response => response.json())
+                        .then(data => {
+                            // Confetti effect
+                            confetti({
+                                particleCount: 100,
+                                spread: 70,
+                                origin: { y: 0.6 }
+                            });
+
+                            // Stylish overlay
+                            const overlay = document.createElement('div');
+                            overlay.style.position = 'fixed';
+                            overlay.style.top = '0';
+                            overlay.style.left = '0';
+                            overlay.style.width = '100%';
+                            overlay.style.height = '100%';
+                            overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+                            overlay.style.backdropFilter = 'blur(5px)';
+                            overlay.style.display = 'flex';
+                            overlay.style.justifyContent = 'center';
+                            overlay.style.alignItems = 'center';
+                            overlay.style.zIndex = '9999';
+
+                            const messageBox = document.createElement('div');
+                            messageBox.style.padding = '20px';
+                            messageBox.style.background = 'white';
+                            messageBox.style.borderRadius = '10px';
+                            messageBox.style.textAlign = 'center';
+                            messageBox.innerHTML = `<h2>${data.message}</h2>`;
+
+                            overlay.appendChild(messageBox);
+                            document.body.appendChild(overlay);
+
+                            overlay.addEventListener('click', () => {
+                                document.body.removeChild(overlay);
+                            });
+                        })
+                        .catch(error => console.error('Error fetching easter egg:', error));
+                }
+            } else {
+                konamiIndex = 0;
+            }
+        });
     </script>
 </body>
 </html>
