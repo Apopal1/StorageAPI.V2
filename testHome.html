@@ -29,7 +29,7 @@
     <script type="text/babel">
         const { useState, useEffect, useCallback, useRef, useMemo } = React;
 
-        const API_BASE_URL = 'http://192.168.10.125:5027';
+        const API_BASE_URL = 'http://localhost:5027';
 
         // --- API Helper ---
         const api = {
@@ -57,8 +57,71 @@
         const LoadingSpinner = () => <div className="loading"><h5>Loading...</h5></div>;
         const ErrorMessage = ({ message }) => <div className="alert alert-danger error" role="alert"><strong>Error:</strong> {message}</div>;
 
+        // --- Registration Screen Component ---
+        const RegistrationScreen = ({ onRegistrationSuccess, onSwitchToLogin }) => {
+            const [formData, setFormData] = useState({
+                firstName: '',
+                lastName: '',
+                email: '',
+                username: '',
+                password: ''
+            });
+            const [error, setError] = useState(null);
+            const [isLoading, setIsLoading] = useState(false);
+            const [successMessage, setSuccessMessage] = useState(null);
+
+            const handleChange = (e) => {
+                const { name, value } = e.target;
+                setFormData(prev => ({ ...prev, [name]: value }));
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError(null);
+                setSuccessMessage(null);
+                setIsLoading(true);
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+
+                    const result = await response.json().catch(() => null);
+                    if (response.ok && result) {
+                        setSuccessMessage(result.Message || 'Registration successful! You can now log in.');
+                        setFormData({ firstName: '', lastName: '', email: '', username: '', password: '' }); // Clear form
+                        onRegistrationSuccess(); // Notify parent component
+                    } else {
+                        setError((result && result.Message) || 'Registration failed');
+                    }
+                } catch (err) {
+                    setError(`Error: ${err.message}`);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            return (
+                <div className="login-container">
+                    <h2 className="text-center mb-4">Register New User</h2>
+                    <form onSubmit={handleSubmit}>
+                        <div className="mb-3"><label className="form-label">First Name</label><input type="text" name="firstName" className="form-control" value={formData.firstName} onChange={handleChange} required /></div>
+                        <div className="mb-3"><label className="form-label">Last Name</label><input type="text" name="lastName" className="form-control" value={formData.lastName} onChange={handleChange} required /></div>
+                        <div className="mb-3"><label className="form-label">Email</label><input type="email" name="email" className="form-control" value={formData.email} onChange={handleChange} required /></div>
+                        <div className="mb-3"><label className="form-label">Username</label><input type="text" name="username" className="form-control" value={formData.username} onChange={handleChange} required /></div>
+                        <div className="mb-3"><label className="form-label">Password</label><input type="password" name="password" className="form-control" value={formData.password} onChange={handleChange} required /></div>
+                        {error && <div className="alert alert-danger">{error}</div>}
+                        {successMessage && <div className="alert alert-success">{successMessage}</div>}
+                        <button type="submit" className="btn btn-success w-100" disabled={isLoading}>{isLoading ? 'Registering...' : 'Register'}</button>
+                        <button type="button" className="btn btn-link w-100 mt-2" onClick={onSwitchToLogin}>Already have an account? Login</button>
+                    </form>
+                </div>
+            );
+        };
+
         // --- Login Screen Component ---
-        const LoginScreen = ({ onLoginSuccess }) => {
+        const LoginScreen = ({ onLoginSuccess, onSwitchToRegister }) => {
             const [username, setUsername] = useState('');
             const [password, setPassword] = useState('');
             const [error, setError] = useState(null);
@@ -89,6 +152,7 @@
                         <div className="mb-3"><label className="form-label">Password</label><input type="password" className="form-control" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
                         {error && <div className="alert alert-danger">{error}</div>}
                         <button type="submit" className="btn btn-primary w-100" disabled={isLoading}>{isLoading ? 'Logging in...' : 'Login'}</button>
+                        <button type="button" className="btn btn-link w-100 mt-2" onClick={onSwitchToRegister}>Don't have an account? Register</button>
                     </form>
                 </div>
             );
@@ -136,11 +200,17 @@
         // --- Storage Item Modal ---
         const StorageItemModal = ({ item, suppliers, onSave, onClose, show }) => {
             const [formData, setFormData] = useState({});
-            useEffect(() => { setFormData(item || { name: '', quantity: 0, location: '', price: 0, supplierId: null }); }, [item]);
+            const [photos, setPhotos] = useState([]);
+
+            useEffect(() => {
+                api.fetch('/api/photos').then(setPhotos).catch(console.error);
+                setFormData(item || { name: '', quantity: 0, location: '', price: 0, supplierId: null, photoPath: '' });
+            }, [item]);
+
             const handleChange = (e) => { const { name, value } = e.target; setFormData(prev => ({ ...prev, [name]: value })); };
             const handleSubmit = (e) => {
                 e.preventDefault();
-                const finalData = { ...formData, price: parseFloat(formData.price) || 0, quantity: parseInt(formData.quantity, 10) || 0, supplierId: formData.supplierId ? parseInt(formData.supplierId, 10) : null };
+                const finalData = { ...formData, price: parseFloat(formData.price) || 0, quantity: parseInt(formData.quantity, 10) || 0, supplierId: formData.supplierId ? parseInt(formData.supplierId, 10) : null, photoPath: formData.photoPath || null };
                 onSave(item ? { ...item, ...finalData } : finalData);
             };
             return (
@@ -157,6 +227,12 @@
                                     {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                 </select>
                             </div>
+                            <div className="mb-3"><label className="form-label">Photo</label>
+                                <select name="photoPath" className="form-select" value={formData.photoPath || ''} onChange={handleChange}>
+                                    <option value="">None</option>
+                                    {photos.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                            </div>
                             <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={onClose}>Close</button><button type="submit" className="btn btn-primary">Save</button></div>
                         </form>
                     </div>
@@ -167,7 +243,9 @@
         // --- Supplier Modal ---
         const SupplierModal = ({ supplier, onSave, onClose, show }) => {
             const [formData, setFormData] = useState({});
-            useEffect(() => { setFormData(supplier || { name: '', afm: '', phoneNumber: '', address: '', email: '' }); }, [supplier]);
+            useEffect(() => {
+                setFormData(supplier || { name: '', afm: '', phoneNumber: '', address: '', email: '' });
+            }, [supplier]);
             const handleChange = (e) => { const { name, value } = e.target; setFormData(prev => ({ ...prev, [name]: value })); };
             const handleSubmit = (e) => { e.preventDefault(); onSave(supplier ? { ...supplier, ...formData } : formData); };
             return (
@@ -322,11 +400,12 @@
                         <div className="card-body">
                             <div className="mb-3"><input type="text" className="form-control" placeholder="Search by name, location, supplier..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
                             <table className="table table-striped table-hover">
-                                <thead><tr><th>ID</th><th>Name</th><th>Quantity</th><th>Location</th><th>Price</th><th>Supplier</th><th>Actions</th></tr></thead>
+                                <thead><tr><th>ID</th><th>Name</th><th>Quantity</th><th>Location</th><th>Price</th><th>Supplier</th><th>Photo</th><th>Actions</th></tr></thead>
                                 <tbody>{filteredItems.map(item => (
                                     <tr key={item.id}>
                                         <td>{item.id}</td><td>{item.name}</td><td>{item.quantity}</td><td>{item.location}</td>
-                                        <td>{item.price ? `$${item.price.toFixed(2)}` : 'N/A'}</td><td>{item.supplierName || 'N/A'}</td>
+                                        <td>{item.price ? `€${item.price.toFixed(2)}` : 'N/A'}</td><td>{item.supplierName || 'N/A'}</td>
+                                        <td>{item.photoPath ? <a href={`${API_BASE_URL.replace('/api', '')}/uploads/${item.photoPath}`} target="_blank" rel="noopener noreferrer">Preview</a> : 'N/A'}</td>
                                         <td>
                                             <button className="btn btn-sm btn-warning me-2" onClick={() => { setEditingItem(item); setIsModalOpen(true); }}>Edit</button>
                                             <button className="btn btn-sm btn-danger" onClick={() => handleDelete(item.id)}>Delete</button>
@@ -486,7 +565,10 @@
                     <div className="card">
                         <div className="card-header d-flex justify-content-between align-items-center">
                             <h3>Superitems</h3>
-                            <button className="btn btn-primary" onClick={() => { setCurrentItem(null); setIsEditModalOpen(true); }}>Add New Superitem</button>
+                            <div>
+                                <button className="btn btn-secondary me-2" onClick={fetchData}>Refresh</button>
+                                <button className="btn btn-primary" onClick={() => { setCurrentItem(null); setIsEditModalOpen(true); }}>Add New Superitem</button>
+                            </div>
                         </div>
                         <div className="card-body">
                             <div className="mb-3"><input type="text" className="form-control" placeholder="Search by name, location..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
@@ -521,7 +603,10 @@
                     <nav className="navbar navbar-expand-lg navbar-dark bg-dark">
                         <div className="container-fluid">
                             <a className="navbar-brand" href="#">Storage Mgmt</a>
-                            <div className="collapse navbar-collapse">
+                            <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                                <span className="navbar-toggler-icon"></span>
+                            </button>
+                            <div className="collapse navbar-collapse" id="navbarNav">
                                 <ul className="navbar-nav me-auto">
                                     <li className="nav-item"><a className={`nav-link ${view === 'items' ? 'active' : ''}`} href="#" onClick={() => setView('items')}>Storage Items</a></li>
                                     <li className="nav-item"><a className={`nav-link ${view === 'suppliers' ? 'active' : ''}`} href="#" onClick={() => setView('suppliers')}>Suppliers</a></li>
@@ -543,10 +628,15 @@
         // --- Root Component ---
         const App = () => {
             const [token, setToken] = useState(localStorage.getItem('jwt_token'));
+            const [showLogin, setShowLogin] = useState(true); // State to toggle between login and register
 
             const handleLoginSuccess = (newToken) => {
                 localStorage.setItem('jwt_token', newToken);
                 window.location.reload();
+            };
+
+            const handleRegistrationSuccess = () => {
+                setShowLogin(true); // After successful registration, switch to login screen
             };
 
             const handleLogout = () => {
@@ -555,7 +645,11 @@
             };
 
             if (!token) {
-                return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
+                return showLogin ? (
+                    <LoginScreen onLoginSuccess={handleLoginSuccess} onSwitchToRegister={() => setShowLogin(false)} />
+                ) : (
+                    <RegistrationScreen onRegistrationSuccess={handleRegistrationSuccess} onSwitchToLogin={() => setShowLogin(true)} />
+                );
             }
 
             return <MainApp onLogout={handleLogout} />;

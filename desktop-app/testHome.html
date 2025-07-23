@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Storage Management</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <style>
+        body { background-color: #f8f9fa; }
+        .navbar { box-shadow: 0 2px 4px rgba(0,0,0,.1); }
+        .card { margin-top: 1rem; }
+        .loading, .error { text-align: center; padding: 40px; font-size: 1.2rem; }
+        .login-container { max-width: 400px; margin: 5rem auto; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,.1); }
+        .modal-backdrop { z-index: 1040 !important; }
+        .modal { z-index: 1050 !important; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- React, ReactDOM, and Babel for JSX transpilation -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef, useMemo } = React;
+
+        const API_BASE_URL = 'http://192.168.10.123:5027';
+
+        // --- API Helper ---
+        const api = {
+            async fetch(url, options = {}) {
+                const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+                const token = localStorage.getItem('jwt_token');
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    ...options.headers,
+                };
+                const response = await fetch(fullUrl, { ...options, headers });
+                if (!response.ok) {
+                    const errorData = await response.text();
+                    throw new Error(errorData || `Request failed with status ${response.status}`);
+                }
+                if (response.status === 204) { // No Content
+                    return null;
+                }
+                return response.json();
+            }
+        };
+
+        // --- Reusable Components ---
+        const LoadingSpinner = () => <div className="loading"><h5>Loading...</h5></div>;
+        const ErrorMessage = ({ message }) => <div className="alert alert-danger error" role="alert"><strong>Error:</strong> {message}</div>;
+
+        // --- Registration Screen Component ---
+        const RegistrationScreen = ({ onRegistrationSuccess, onSwitchToLogin }) => {
+            const [formData, setFormData] = useState({
+                firstName: '',
+                lastName: '',
+                email: '',
+                username: '',
+                password: ''
+            });
+            const [error, setError] = useState(null);
+            const [isLoading, setIsLoading] = useState(false);
+            const [successMessage, setSuccessMessage] = useState(null);
+
+            const handleChange = (e) => {
+                const { name, value } = e.target;
+                setFormData(prev => ({ ...prev, [name]: value }));
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError(null);
+                setSuccessMessage(null);
+                setIsLoading(true);
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+
+                    const result = await response.json().catch(() => null);
+                    if (response.ok && result) {
+                        setSuccessMessage(result.Message || 'Registration successful! You can now log in.');
+                        setFormData({ firstName: '', lastName: '', email: '', username: '', password: '' }); // Clear form
+                        onRegistrationSuccess(); // Notify parent component
+                    } else {
+                        setError((result && result.Message) || 'Registration failed');
+                    }
+                } catch (err) {
+                    setError(`Error: ${err.message}`);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            return (
+                <div className="login-container">
+                    <h2 className="text-center mb-4">Register New User</h2>
+                    <form onSubmit={handleSubmit}>
+                        <div className="mb-3"><label className="form-label">First Name</label><input type="text" name="firstName" className="form-control" value={formData.firstName} onChange={handleChange} required /></div>
+                        <div className="mb-3"><label className="form-label">Last Name</label><input type="text" name="lastName" className="form-control" value={formData.lastName} onChange={handleChange} required /></div>
+                        <div className="mb-3"><label className="form-label">Email</label><input type="email" name="email" className="form-control" value={formData.email} onChange={handleChange} required /></div>
+                        <div className="mb-3"><label className="form-label">Username</label><input type="text" name="username" className="form-control" value={formData.username} onChange={handleChange} required /></div>
+                        <div className="mb-3"><label className="form-label">Password</label><input type="password" name="password" className="form-control" value={formData.password} onChange={handleChange} required /></div>
+                        {error && <div className="alert alert-danger">{error}</div>}
+                        {successMessage && <div className="alert alert-success">{successMessage}</div>}
+                        <button type="submit" className="btn btn-success w-100" disabled={isLoading}>{isLoading ? 'Registering...' : 'Register'}</button>
+                        <button type="button" className="btn btn-link w-100 mt-2" onClick={onSwitchToLogin}>Already have an account? Login</button>
+                    </form>
+                </div>
+            );
+        };
+
+        // --- Login Screen Component ---
+        const LoginScreen = ({ onLoginSuccess, onSwitchToRegister }) => {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState(null);
+            const [isLoading, setIsLoading] = useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setError(null);
+                setIsLoading(true);
+                try {
+                    const data = await api.fetch('/api/auth/webtoken', {
+                        method: 'POST',
+                        body: JSON.stringify({ username, password }),
+                    });
+                    onLoginSuccess(data.token);
+                } catch (err) {
+                    setError(err.message || 'Login failed. Please check your credentials.');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            return (
+                <div className="login-container">
+                    <h2 className="text-center mb-4">Login</h2>
+                    <form onSubmit={handleSubmit}>
+                        <div className="mb-3"><label className="form-label">Username</label><input type="text" className="form-control" value={username} onChange={(e) => setUsername(e.target.value)} required /></div>
+                        <div className="mb-3"><label className="form-label">Password</label><input type="password" className="form-control" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
+                        {error && <div className="alert alert-danger">{error}</div>}
+                        <button type="submit" className="btn btn-primary w-100" disabled={isLoading}>{isLoading ? 'Logging in...' : 'Login'}</button>
+                        <button type="button" className="btn btn-link w-100 mt-2" onClick={onSwitchToRegister}>Don't have an account? Register</button>
+                    </form>
+                </div>
+            );
+        };
+
+        // --- Generic Modal Component ---
+        const FormModal = ({ title, children, onClose, show, size = 'modal-lg' }) => {
+            const modalRef = useRef();
+
+            useEffect(() => {
+                const modalElement = modalRef.current;
+                if (!modalElement) return;
+                const bsModal = new bootstrap.Modal(modalElement, { backdrop: 'static', keyboard: false });
+                
+                if (show) {
+                    bsModal.show();
+                }
+
+                return () => {
+                    const modalInstance = bootstrap.Modal.getInstance(modalElement);
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+                    document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+                };
+            }, [show]);
+
+            if (!show) return null;
+
+            return (
+                <div className="modal" tabIndex="-1" ref={modalRef}>
+                    <div className={`modal-dialog ${size}`}>
+                        <div className="modal-content">
+                            <div className="modal-header">
+                                <h5 className="modal-title">{title}</h5>
+                                <button type="button" className="btn-close" onClick={onClose}></button>
+                            </div>
+                            {children}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Storage Item Modal ---
+        const StorageItemModal = ({ item, suppliers, onSave, onClose, show }) => {
+            const [formData, setFormData] = useState({});
+            const [photos, setPhotos] = useState([]);
+
+            useEffect(() => {
+                api.fetch('/api/photos').then(setPhotos).catch(console.error);
+                setFormData(item || { name: '', quantity: 0, location: '', price: 0, supplierId: null, photoPath: '' });
+            }, [item]);
+
+            const handleChange = (e) => { const { name, value } = e.target; setFormData(prev => ({ ...prev, [name]: value })); };
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const finalData = { ...formData, price: parseFloat(formData.price) || 0, quantity: parseInt(formData.quantity, 10) || 0, supplierId: formData.supplierId ? parseInt(formData.supplierId, 10) : null, photoPath: formData.photoPath || null };
+                onSave(item ? { ...item, ...finalData } : finalData);
+            };
+            return (
+                <FormModal title={item ? 'Edit Item' : 'Add New Item'} onClose={onClose} show={show}>
+                    <div className="modal-body">
+                        <form onSubmit={handleSubmit}>
+                            <div className="mb-3"><label className="form-label">Name</label><input type="text" name="name" className="form-control" value={formData.name || ''} onChange={handleChange} required /></div>
+                            <div className="mb-3"><label className="form-label">Quantity</label><input type="number" name="quantity" className="form-control" value={formData.quantity || 0} onChange={handleChange} required /></div>
+                            <div className="mb-3"><label className="form-label">Location</label><input type="text" name="location" className="form-control" value={formData.location || ''} onChange={handleChange} required /></div>
+                            <div className="mb-3"><label className="form-label">Price</label><input type="number" step="0.01" name="price" className="form-control" value={formData.price || 0} onChange={handleChange} /></div>
+                            <div className="mb-3"><label className="form-label">Supplier</label>
+                                <select name="supplierId" className="form-select" value={formData.supplierId || ''} onChange={handleChange}>
+                                    <option value="">None</option>
+                                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="mb-3"><label className="form-label">Photo</label>
+                                <select name="photoPath" className="form-select" value={formData.photoPath || ''} onChange={handleChange}>
+                                    <option value="">None</option>
+                                    {photos.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                            </div>
+                            <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={onClose}>Close</button><button type="submit" className="btn btn-primary">Save</button></div>
+                        </form>
+                    </div>
+                </FormModal>
+            );
+        };
+        
+        // --- Supplier Modal ---
+        const SupplierModal = ({ supplier, onSave, onClose, show }) => {
+            const [formData, setFormData] = useState({});
+            useEffect(() => {
+                setFormData(supplier || { name: '', afm: '', phoneNumber: '', address: '', email: '' });
+            }, [supplier]);
+            const handleChange = (e) => { const { name, value } = e.target; setFormData(prev => ({ ...prev, [name]: value })); };
+            const handleSubmit = (e) => { e.preventDefault(); onSave(supplier ? { ...supplier, ...formData } : formData); };
+            return (
+                <FormModal title={supplier ? 'Edit Supplier' : 'Add New Supplier'} onClose={onClose} show={show}>
+                    <div className="modal-body">
+                        <form onSubmit={handleSubmit}>
+                            <div className="mb-3"><label className="form-label">Name</label><input type="text" name="name" className="form-control" value={formData.name || ''} onChange={handleChange} required /></div>
+                            <div className="mb-3"><label className="form-label">AFM</label><input type="text" name="afm" className="form-control" value={formData.afm || ''} onChange={handleChange} /></div>
+                            <div className="mb-3"><label className="form-label">Phone Number</label><input type="text" name="phoneNumber" className="form-control" value={formData.phoneNumber || ''} onChange={handleChange} /></div>
+                            <div className="mb-3"><label className="form-label">Address</label><input type="text" name="address" className="form-control" value={formData.address || ''} onChange={handleChange} /></div>
+                            <div className="mb-3"><label className="form-label">Email</label><input type="email" name="email" className="form-control" value={formData.email || ''} onChange={handleChange} /></div>
+                            <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={onClose}>Close</button><button type="submit" className="btn btn-primary">Save</button></div>
+                        </form>
+                    </div>
+                </FormModal>
+            );
+        };
+
+        // --- Superitem Modal ---
+        const SuperitemModal = ({ item, onSave, onClose, show }) => {
+            const [formData, setFormData] = useState({});
+            useEffect(() => { setFormData(item || { name: '', location: '', quantity: 0 }); }, [item]);
+            const handleChange = (e) => { const { name, value } = e.target; setFormData(prev => ({ ...prev, [name]: value })); };
+            const handleSubmit = (e) => { e.preventDefault(); onSave(item ? { ...item, ...formData } : formData); };
+            return (
+                <FormModal title={item ? 'Edit Superitem' : 'Add New Superitem'} onClose={onClose} show={show}>
+                    <div className="modal-body">
+                        <form onSubmit={handleSubmit}>
+                            <div className="mb-3"><label className="form-label">Name</label><input type="text" name="name" className="form-control" value={formData.name || ''} onChange={handleChange} required /></div>
+                            <div className="mb-3"><label className="form-label">Location</label><input type="text" name="location" className="form-control" value={formData.location || ''} onChange={handleChange} required /></div>
+                            <div className="mb-3"><label className="form-label">Quantity</label><input type="number" name="quantity" className="form-control" value={formData.quantity || 0} onChange={handleChange} required /></div>
+                            <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={onClose}>Close</button><button type="submit" className="btn btn-primary">Save</button></div>
+                        </form>
+                    </div>
+                </FormModal>
+            );
+        };
+
+        // --- Sub-item Management Modal ---
+        const SubItemManagementModal = ({ superitem, allStorageItems, onSave, onClose, show }) => {
+            const [subItems, setSubItems] = useState([]);
+            const [selectedStorageItemId, setSelectedStorageItemId] = useState('');
+            const [quantity, setQuantity] = useState(1);
+
+            useEffect(() => { if (superitem) { setSubItems(superitem.subItems || []); } }, [superitem]);
+
+            const handleAddSubItem = async () => {
+                if (!selectedStorageItemId || quantity <= 0) { alert('Please select an item and enter a valid quantity.'); return; }
+                try {
+                    const storageId = parseInt(selectedStorageItemId, 10);
+                    const itemQuantity = parseInt(quantity, 10);
+                    await api.fetch(`/api/superitems/${superitem.id}/subitems/${storageId}/${itemQuantity}`, {
+                        method: 'POST'
+                    });
+                    onSave(); // Notify parent to refetch data
+                } catch (err) { alert(`Failed to add sub-item: ${err.message}`); }
+            };
+
+            const handleRemoveSubItem = async (storageItemId) => {
+                if (window.confirm('Are you sure?')) {
+                    try { await api.fetch(`/api/superitems/${superitem.id}/subitems/${storageItemId}`, { method: 'DELETE' }); onSave(); }
+                    catch (err) { alert(`Failed to remove sub-item: ${err.message}`); }
+                }
+            };
+
+            return (
+                <FormModal title={`Manage Sub-items for ${superitem?.name}`} onClose={onClose} show={show} size="modal-xl">
+                    <div className="modal-body">
+                        <h5>Current Sub-items</h5>
+                        {subItems.length > 0 ? (
+                            <ul className="list-group mb-4">{subItems.map(si => (
+                                <li key={si.storageItemId} className="list-group-item d-flex justify-content-between align-items-center">
+                                    {si.storageItemName}
+                                    <div>
+                                        <span className="badge bg-primary rounded-pill me-3">Quantity: {si.quantity}</span>
+                                        <button className="btn btn-sm btn-danger" onClick={() => handleRemoveSubItem(si.storageItemId)}>Remove</button>
+                                    </div>
+                                </li>
+                            ))}</ul>
+                        ) : <p>No sub-items yet.</p>}
+                        <hr />
+                        <h5>Add New Sub-item</h5>
+                        <div className="row g-3 align-items-end">
+                            <div className="col-md-6"><label className="form-label">Storage Item</label><select className="form-select" value={selectedStorageItemId} onChange={(e) => setSelectedStorageItemId(e.target.value)}><option value="">Choose...</option>{allStorageItems.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
+                            <div className="col-md-4"><label className="form-label">Quantity</label><input type="number" className="form-control" value={quantity} onChange={(e) => setQuantity(e.target.value)} min="1" /></div>
+                            <div className="col-md-2"><button className="btn btn-success w-100" onClick={handleAddSubItem}>Add</button></div>
+                        </div>
+                    </div>
+                    <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={onClose}>Done</button></div>
+                </FormModal>
+            );
+        };
+
+        // --- Data Views ---
+        const StorageItemsView = () => {
+            const [items, setItems] = useState([]);
+            const [suppliers, setSuppliers] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingItem, setEditingItem] = useState(null);
+            const [searchTerm, setSearchTerm] = useState('');
+
+            const fetchData = useCallback(async () => {
+                try {
+                    setLoading(true);
+                    const [itemsData, suppliersData] = await Promise.all([api.fetch('/api/storageitems'), api.fetch('/api/suppliers')]);
+                    setItems(itemsData);
+                    setSuppliers(suppliersData);
+                } catch (err) { setError(err.message); } finally { setLoading(false); }
+            }, []);
+
+            useEffect(() => { fetchData(); }, [fetchData]);
+
+            const handleSave = async (itemToSave) => {
+                try {
+                    if (itemToSave.id) { await api.fetch(`/api/storageitems/${itemToSave.id}`, { method: 'PUT', body: JSON.stringify(itemToSave) }); } 
+                    else { await api.fetch('/api/storageitems', { method: 'POST', body: JSON.stringify(itemToSave) }); }
+                    setIsModalOpen(false); fetchData();
+                } catch (err) { alert(`Failed to save item: ${err.message}`); }
+            };
+
+            const handleDelete = async (id) => {
+                if (window.confirm('Are you sure?')) {
+                    try { await api.fetch(`/api/storageitems/${id}`, { method: 'DELETE' }); fetchData(); } 
+                    catch (err) { alert(`Failed to delete item: ${err.message}`); }
+                }
+            };
+
+            const filteredItems = useMemo(() => items.filter(item => {
+                const searchLower = searchTerm.toLowerCase();
+                return (
+                    item.name.toLowerCase().includes(searchLower) ||
+                    item.location.toLowerCase().includes(searchLower) ||
+                    (item.supplierName && item.supplierName.toLowerCase().includes(searchLower)) ||
+                    item.id.toString().toLowerCase().includes(searchLower) 
+                    //(item.Id && item.Id.toLowerCase().includes(searchLower))
+                );
+            }), [items, searchTerm]);
+
+            if (loading) return <LoadingSpinner />;
+            if (error) return <ErrorMessage message={error} />;
+
+            return (
+                <>
+                    <StorageItemModal item={editingItem} suppliers={suppliers} onSave={handleSave} onClose={() => setIsModalOpen(false)} show={isModalOpen} />
+                    <div className="card">
+                        <div className="card-header d-flex justify-content-between align-items-center">
+                            <h3>Storage Items</h3>
+                            <button className="btn btn-primary" onClick={() => { setEditingItem(null); setIsModalOpen(true); }}>Add New Item</button>
+                        </div>
+                        <div className="card-body">
+                            <div className="mb-3"><input type="text" className="form-control" placeholder="Search by name, location, supplier..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                            <table className="table table-striped table-hover">
+                                <thead><tr><th>ID</th><th>Name</th><th>Quantity</th><th>Location</th><th>Price</th><th>Supplier</th><th>Photo</th><th>Actions</th></tr></thead>
+                                <tbody>{filteredItems.map(item => (
+                                    <tr key={item.id}>
+                                        <td>{item.id}</td><td>{item.name}</td><td>{item.quantity}</td><td>{item.location}</td>
+                                        <td>{item.price ? `€${item.price.toFixed(2)}` : 'N/A'}</td><td>{item.supplierName || 'N/A'}</td>
+                                        <td>{item.photoPath ? <a href={`${API_BASE_URL.replace('/api', '')}/uploads/${item.photoPath}`} target="_blank" rel="noopener noreferrer">Preview</a> : 'N/A'}</td>
+                                        <td>
+                                            <button className="btn btn-sm btn-warning me-2" onClick={() => { setEditingItem(item); setIsModalOpen(true); }}>Edit</button>
+                                            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(item.id)}>Delete</button>
+                                        </td>
+                                    </tr>
+                                ))}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>
+            );
+        };
+
+        const SuppliersView = () => {
+            const [suppliers, setSuppliers] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [editingSupplier, setEditingSupplier] = useState(null);
+            const [searchTerm, setSearchTerm] = useState('');
+
+            const fetchData = useCallback(async () => {
+                try { setLoading(true); const data = await api.fetch('/api/suppliers'); setSuppliers(data); }
+                catch (err) { setError(err.message); } finally { setLoading(false); }
+            }, []);
+
+            useEffect(() => { fetchData(); }, [fetchData]);
+
+            const handleSave = async (supplierToSave) => {
+                try {
+                    if (supplierToSave.id) { await api.fetch(`/api/suppliers/${supplierToSave.id}`, { method: 'PUT', body: JSON.stringify(supplierToSave) }); } 
+                    else { await api.fetch('/api/suppliers', { method: 'POST', body: JSON.stringify(supplierToSave) }); }
+                    setIsModalOpen(false); fetchData();
+                } catch (err) { alert(`Failed to save supplier: ${err.message}`); }
+            };
+
+            const handleDelete = async (id) => {
+                if (window.confirm('Are you sure?')) {
+                    try { await api.fetch(`/api/suppliers/${id}`, { method: 'DELETE' }); fetchData(); } 
+                    catch (err) { alert(`Failed to delete supplier: ${err.message}`); }
+                }
+            };
+
+            const filteredSuppliers = useMemo(() => suppliers.filter(s => {
+                const searchLower = searchTerm.toLowerCase();
+                return (
+                    s.name?.toLowerCase().includes(searchLower) ||
+                    s.afm?.toLowerCase().includes(searchLower) ||
+                    s.phoneNumber?.toLowerCase().includes(searchLower) ||
+                    s.address?.toLowerCase().includes(searchLower) ||
+                    s.email?.toLowerCase().includes(searchLower)
+                );
+            }), [suppliers, searchTerm]);
+
+            if (loading) return <LoadingSpinner />;
+            if (error) return <ErrorMessage message={error} />;
+
+            return (
+                <>
+                    <SupplierModal supplier={editingSupplier} onSave={handleSave} onClose={() => setIsModalOpen(false)} show={isModalOpen} />
+                    <div className="card">
+                        <div className="card-header d-flex justify-content-between align-items-center">
+                            <h3>Suppliers</h3>
+                            <button className="btn btn-primary" onClick={() => { setEditingSupplier(null); setIsModalOpen(true); }}>Add New Supplier</button>
+                        </div>
+                        <div className="card-body">
+                            <div className="mb-3"><input type="text" className="form-control" placeholder="Search by name, AFM, phone, address, email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                            <table className="table table-striped table-hover">
+                                <thead><tr><th>ID</th><th>Name</th><th>AFM</th><th>Phone</th><th>Address</th><th>Email</th><th>Actions</th></tr></thead>
+                                <tbody>{filteredSuppliers.map(s => (
+                                    <tr key={s.id}>
+                                        <td>{s.id}</td><td>{s.name}</td><td>{s.afm}</td><td>{s.phoneNumber}</td><td>{s.address}</td><td>{s.email}</td>
+                                        <td>
+                                            <button className="btn btn-sm btn-warning me-2" onClick={() => { setEditingSupplier(s); setIsModalOpen(true); }}>Edit</button>
+                                            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(s.id)}>Delete</button>
+                                        </td>
+                                    </tr>
+                                ))}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>
+            );
+        };
+
+        const SuperitemsView = () => {
+            const [superitems, setSuperitems] = useState([]);
+            const [allStorageItems, setAllStorageItems] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [error, setError] = useState(null);
+            const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+            const [isSubItemModalOpen, setIsSubItemModalOpen] = useState(false);
+            const [currentItem, setCurrentItem] = useState(null);
+            const [searchTerm, setSearchTerm] = useState('');
+
+            const fetchData = useCallback(async () => {
+                try {
+                    setLoading(true);
+                    const [superitemsData, storageItemsData] = await Promise.all([api.fetch('/api/superitems'), api.fetch('/api/storageitems')]);
+
+                    // Fetch 'possible to make' for each superitem
+                    const superitemsWithPossible = await Promise.all(superitemsData.map(async (superitem) => {
+                        try {
+                            const possible = await api.fetch(`/api/superitems/${superitem.id}/possible`);
+                            return { ...superitem, possibleToMake: possible };
+                        } catch (e) {
+                            console.error(`Error fetching possible to make for superitem ${superitem.id}:`, e);
+                            return { ...superitem, possibleToMake: 0 }; // Default to 0 on error
+                        }
+                    }));
+
+                    setSuperitems(superitemsWithPossible);
+                    setAllStorageItems(storageItemsData);
+                } catch (err) { setError(err.message); } finally { setLoading(false); }
+            }, []);
+
+            useEffect(() => { fetchData(); }, [fetchData]);
+
+            const handleSave = async (itemToSave) => {
+                try {
+                    if (itemToSave.id) { await api.fetch(`/api/superitems/${itemToSave.id}`, { method: 'PUT', body: JSON.stringify(itemToSave) }); } 
+                    else { await api.fetch('/api/superitems', { method: 'POST', body: JSON.stringify(itemToSave) }); }
+                    setIsEditModalOpen(false); fetchData();
+                } catch (err) { alert(`Failed to save superitem: ${err.message}`); }
+            };
+
+            const handleDelete = async (id) => {
+                if (window.confirm('Are you sure?')) {
+                    try { await api.fetch(`/api/superitems/${id}`, { method: 'DELETE' }); fetchData(); } 
+                    catch (err) { alert(`Failed to delete superitem: ${err.message}`); }
+                }
+            };
+            
+            const handleSubItemSave = () => {
+                const superitemId = currentItem.id;
+                api.fetch(`/api/superitems/${superitemId}`).then(updatedSuperitem => {
+                    setSuperitems(prev => prev.map(si => si.id === superitemId ? updatedSuperitem : si));
+                    setCurrentItem(updatedSuperitem);
+                });
+            };
+
+            const filteredSuperitems = useMemo(() => superitems.filter(item => {
+                const searchLower = searchTerm.toLowerCase();
+                return (
+                    item.name.toLowerCase().includes(searchLower) ||
+                    item.location.toLowerCase().includes(searchLower)
+                );
+            }), [superitems, searchTerm]);
+
+            if (loading) return <LoadingSpinner />;
+            if (error) return <ErrorMessage message={error} />;
+
+            return (
+                <>
+                    <SuperitemModal item={currentItem} onSave={handleSave} onClose={() => setIsEditModalOpen(false)} show={isEditModalOpen} />
+                    {currentItem && <SubItemManagementModal superitem={currentItem} allStorageItems={allStorageItems} onSave={handleSubItemSave} onClose={() => setIsSubItemModalOpen(false)} show={isSubItemModalOpen} />}
+                    <div className="card">
+                        <div className="card-header d-flex justify-content-between align-items-center">
+                            <h3>Superitems</h3>
+                            <div>
+                                <button className="btn btn-secondary me-2" onClick={fetchData}>Refresh</button>
+                                <button className="btn btn-primary" onClick={() => { setCurrentItem(null); setIsEditModalOpen(true); }}>Add New Superitem</button>
+                            </div>
+                        </div>
+                        <div className="card-body">
+                            <div className="mb-3"><input type="text" className="form-control" placeholder="Search by name, location..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                            <table className="table table-striped table-hover">
+                                <thead><tr><th>ID</th><th>Name</th><th>Location</th><th>Quantity</th><th>Sub-items</th><th>Possible to Make</th><th>Actions</th></tr></thead>
+                                <tbody>{filteredSuperitems.map(item => (
+                                    <tr key={item.id}>
+                                        <td>{item.id}</td><td>{item.name}</td><td>{item.location}</td><td>{item.quantity}</td>
+                                        <td>{item.subItems?.length || 0}</td>
+                                    <td>{item.possibleToMake}</td>
+                                    
+                                        <td>
+                                            <button className="btn btn-sm btn-info me-2" onClick={() => { setCurrentItem(item); setIsSubItemModalOpen(true); }}>Manage Sub-items</button>
+                                            <button className="btn btn-sm btn-warning me-2" onClick={() => { setCurrentItem(item); setIsEditModalOpen(true); }}>Edit</button>
+                                            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(item.id)}>Delete</button>
+                                        </td>
+                                    </tr>
+                                ))}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                </>
+            );
+        };
+
+        // --- Main Application Component ---
+        const MainApp = ({ onLogout }) => {
+            const [view, setView] = useState('items'); // 'items', 'suppliers', or 'superitems'
+
+            return (
+                <>
+                    <nav className="navbar navbar-expand-lg navbar-dark bg-dark">
+                        <div className="container-fluid">
+                            <a className="navbar-brand" href="#">Storage Mgmt</a>
+                            <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                                <span className="navbar-toggler-icon"></span>
+                            </button>
+                            <div className="collapse navbar-collapse" id="navbarNav">
+                                <ul className="navbar-nav me-auto">
+                                    <li className="nav-item"><a className={`nav-link ${view === 'items' ? 'active' : ''}`} href="#" onClick={() => setView('items')}>Storage Items</a></li>
+                                    <li className="nav-item"><a className={`nav-link ${view === 'suppliers' ? 'active' : ''}`} href="#" onClick={() => setView('suppliers')}>Suppliers</a></li>
+                                    <li className="nav-item"><a className={`nav-link ${view === 'superitems' ? 'active' : ''}`} href="#" onClick={() => setView('superitems')}>Superitems</a></li>
+                                </ul>
+                                <button className="btn btn-outline-light" onClick={onLogout}>Logout</button>
+                            </div>
+                        </div>
+                    </nav>
+                    <main className="container mt-4">
+                        {view === 'items' && <StorageItemsView />}
+                        {view === 'suppliers' && <SuppliersView />}
+                        {view === 'superitems' && <SuperitemsView />}
+                    </main>
+                </>
+            );
+        };
+
+        // --- Root Component ---
+        const App = () => {
+            const [token, setToken] = useState(localStorage.getItem('jwt_token'));
+            const [showLogin, setShowLogin] = useState(true); // State to toggle between login and register
+
+            const handleLoginSuccess = (newToken) => {
+                localStorage.setItem('jwt_token', newToken);
+                window.location.reload();
+            };
+
+            const handleRegistrationSuccess = () => {
+                setShowLogin(true); // After successful registration, switch to login screen
+            };
+
+            const handleLogout = () => {
+                localStorage.removeItem('jwt_token');
+                setToken(null);
+            };
+
+            if (!token) {
+                return showLogin ? (
+                    <LoginScreen onLoginSuccess={handleLoginSuccess} onSwitchToRegister={() => setShowLogin(false)} />
+                ) : (
+                    <RegistrationScreen onRegistrationSuccess={handleRegistrationSuccess} onSwitchToLogin={() => setShowLogin(true)} />
+                );
+            }
+
+            return <MainApp onLogout={handleLogout} />;
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

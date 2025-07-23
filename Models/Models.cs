@@ -20,6 +20,7 @@ namespace StorageManagement.API.Models
         public string Location { get; set; } = string.Empty;
         public double? Price { get; set; }
         public int? SupplierId { get; set; } // Foreign key to Suppliers
+        public string? PhotoPath { get; set; } // Path to the photo
         public string? SupplierName { get; set; } // For display purposes
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }

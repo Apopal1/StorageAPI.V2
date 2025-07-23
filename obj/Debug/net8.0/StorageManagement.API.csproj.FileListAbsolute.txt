@@ -209,3 +209,7 @@ C:\Users\Apostolis\Documents\StorageAPI.V2\StorageAPI.V2\obj\Debug\net8.0\refint
 C:\Users\Apostolis\Documents\StorageAPI.V2\StorageAPI.V2\obj\Debug\net8.0\StorageManagement.API.pdb
 C:\Users\Apostolis\Documents\StorageAPI.V2\StorageAPI.V2\obj\Debug\net8.0\StorageManagement.API.genruntimeconfig.cache
 C:\Users\Apostolis\Documents\StorageAPI.V2\StorageAPI.V2\obj\Debug\net8.0\ref\StorageManagement.API.dll
+C:\Users\Apostolis\Documents\StorageAPI.V2\StorageAPI.V2\bin\Debug\net8.0\desktop-app\dist\win-unpacked\vk_swiftshader_icd.json
+C:\Users\Apostolis\Documents\StorageAPI.V2\StorageAPI.V2\bin\Debug\net8.0\desktop-app\package-lock.json
+C:\Users\Apostolis\Documents\StorageAPI.V2\StorageAPI.V2\bin\Debug\net8.0\desktop-app\package.json
+C:\Users\Apostolis\Documents\StorageAPI.V2\StorageAPI.V2\bin\Debug\net8.0\StorageManagement.API.staticwebassets.runtime.json

@@ -74,6 +74,8 @@ builder.Services.AddAuthentication(options =>
 });
 
 
+builder.Services.AddSingleton<IWebHostEnvironment>(builder.Environment);
+
 // Register repositories
 var connectionString = "Data Source=storage.db";
 builder.Services.AddScoped<IUserRepository>(provider => 
@@ -95,6 +97,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("AllowAll");
+
+app.UseStaticFiles(); // Enable static file serving
 
 // Add authentication middleware
 app.UseAuthentication();
@@ -151,10 +155,19 @@ void InitializeDatabase(string connectionString)
             Location TEXT NOT NULL,
             Price REAL DEFAULT 0,
             SupplierId INTEGER,
+            PhotoPath TEXT,
             CreatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
             UpdatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (SupplierId) REFERENCES Suppliers(Id)
         )");
+
+    // Add PhotoPath column if it doesn't exist (for migrations)
+    var tableInfo = connection.Query("PRAGMA table_info(StorageItems)").ToList();
+    var columnExists = tableInfo.Any(c => c.name == "PhotoPath");
+    if (!columnExists)
+    {
+        connection.Execute("ALTER TABLE StorageItems ADD COLUMN PhotoPath TEXT");
+    }
 
     // Create Superitems table
     connection.Execute(@"

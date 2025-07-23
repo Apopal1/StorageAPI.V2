@@ -35,8 +35,8 @@ namespace StorageManagement.API.Repositories
         public async Task<StorageItem> CreateAsync(StorageItem item)
         {
             using var connection = new SqliteConnection(_connectionString);
-            var sql = @"INSERT INTO StorageItems (Name, Quantity, Location, Price, SupplierId) 
-                       VALUES (@Name, @Quantity, @Location, @Price, @SupplierId);
+            var sql = @"INSERT INTO StorageItems (Name, Quantity, Location, Price, SupplierId, PhotoPath) 
+                       VALUES (@Name, @Quantity, @Location, @Price, @SupplierId, @PhotoPath);
                        SELECT last_insert_rowid();";
             
             var id = await connection.QuerySingleAsync<int>(sql, item);
@@ -63,11 +63,12 @@ namespace StorageManagement.API.Repositories
             var updatedLocation = string.IsNullOrWhiteSpace(item.Location) ? existingItem.Location : item.Location;
             var updatedPrice = item.Price ?? existingItem.Price;
             var updatedSupplierId = item.SupplierId ?? existingItem.SupplierId;
+            var updatedPhotoPath = item.PhotoPath == "" ? null : item.PhotoPath;
             
             await connection.ExecuteAsync(@"
                 UPDATE StorageItems 
                 SET Name = @Name, Quantity = @Quantity, Location = @Location, 
-                    Price = @Price, SupplierId = @SupplierId, UpdatedAt = CURRENT_TIMESTAMP 
+                    Price = @Price, SupplierId = @SupplierId, PhotoPath = @PhotoPath, UpdatedAt = CURRENT_TIMESTAMP 
                 WHERE Id = @Id", 
                 new { 
                     Id = item.Id, 
@@ -75,7 +76,8 @@ namespace StorageManagement.API.Repositories
                     Quantity = updatedQuantity, 
                     Location = updatedLocation,
                     Price = updatedPrice,
-                    SupplierId = updatedSupplierId
+                    SupplierId = updatedSupplierId,
+                    PhotoPath = updatedPhotoPath
                 });
             
             // Return updated item with supplier name
