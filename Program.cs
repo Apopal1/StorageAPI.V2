@@ -86,6 +86,8 @@ builder.Services.AddScoped<ISupplierRepository>(provider =>
     new SupplierRepository(connectionString));
 builder.Services.AddScoped<ISuperitemRepository>(provider => 
     new SuperitemRepository(connectionString));
+builder.Services.AddScoped<IOutgoingOrderRepository>(provider => 
+    new OutgoingOrderRepository(connectionString));
 
 var app = builder.Build();
 
@@ -187,6 +189,31 @@ void InitializeDatabase(string connectionString)
             Quantity INTEGER NOT NULL DEFAULT 1,
             PRIMARY KEY (SuperitemId, StorageItemId),
             FOREIGN KEY (SuperitemId) REFERENCES Superitems(Id) ON DELETE CASCADE,
+            FOREIGN KEY (StorageItemId) REFERENCES StorageItems(Id) ON DELETE CASCADE
+        )
+    ");
+
+    // Create OutgoingOrders table
+    connection.Execute(@"
+        CREATE TABLE IF NOT EXISTS OutgoingOrders (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            OrderDate DATETIME DEFAULT CURRENT_TIMESTAMP,
+            Recipient TEXT NOT NULL,
+            SerialNumber TEXT NOT NULL UNIQUE,
+            Status TEXT NOT NULL DEFAULT 'Open'
+        )
+    ");
+
+    // Create OutgoingOrderItems join table
+    connection.Execute(@"
+        CREATE TABLE IF NOT EXISTS OutgoingOrderItems (
+            Id INTEGER PRIMARY KEY AUTOINCREMENT,
+            OutgoingOrderId INTEGER NOT NULL,
+            StorageItemId INTEGER,
+            Quantity INTEGER NOT NULL DEFAULT 1,
+            CustomItemDescription TEXT,
+            CHECK ((StorageItemId IS NOT NULL AND CustomItemDescription IS NULL) OR (StorageItemId IS NULL AND CustomItemDescription IS NOT NULL)),
+            FOREIGN KEY (OutgoingOrderId) REFERENCES OutgoingOrders(Id) ON DELETE CASCADE,
             FOREIGN KEY (StorageItemId) REFERENCES StorageItems(Id) ON DELETE CASCADE
         )
     ");
